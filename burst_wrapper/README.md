@@ -1,4 +1,4 @@
-An assignment from a graduate course. Requires a linux operating system and Python 3.
+Requires a linux operating system and Python 3.
 
 **Objective:** Complete a convenience wrapper script that runs BURST as a 3rd party software tool for performing alignment, assembly, phylogeny inference, secondary structure prediction, etc. 
 
