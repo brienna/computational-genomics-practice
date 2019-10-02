@@ -2,6 +2,7 @@ import argparse
 import os
 from Bio import SeqIO
 import numpy as np
+import re
 
 class Needleman_Wunsch_Executable(object):
 	'''Template for Needleman Wunsch executable. '''
@@ -18,19 +19,49 @@ class Needleman_Wunsch_Executable(object):
 		self.gap_penalty = gap_penalty
 		self.mismatch_penalty = mismatch_penalty
 		self.max_alignments = max_alignments
+		self.ref_matches = None
+		self.query_matches = None
 
 		self.args = self.make_arg_parser().parse_args()
-		self.ref = self.args.ref
-		self.query = self.args.query
-		self.parse_sequences(self.ref, self.query)
-
+		self.ref_obj, self.query_obj = self.parse_sequences(self.args.ref, self.args.query)
+		self.ref = self.ref_obj.seq 
+		self.query = self.query_obj.seq
 
 	def parse_sequences(self, ref, query):
 		# Parse query and ref data / can assign this as a function later to check for fasta instead of passed through executable init
-		self.query = list(SeqIO.parse(query, 'fasta'))[0].seq
-		self.ref = list(SeqIO.parse(ref, 'fasta'))[0].seq
+		print('Parsing ' + query + '...')
+		query_obj = list(SeqIO.parse(query, 'fasta'))[0]
+		print('Parsing ' + ref + '...')
+		ref_obj = list(SeqIO.parse(ref, 'fasta'))[0]
 		#self.ref = 'GCATGCUE'
 		#self.query = 'GATTACA'
+		return ref_obj, query_obj
+
+	def parse_matches(self, m_file):
+		print('Parsing ' + m_file + '...')
+		
+		fruit_fly_matches = []
+		human_matches = []
+
+		with open(m_file, 'r') as infile:
+			for line in infile:
+				positions = re.split('\t|\n', line)
+		
+				h_region = {'start': positions[0],
+							'end': positions[1]}
+				ff_region = {'start': positions[2],
+							'end': positions[3]}
+		
+				human_matches.append(h_region)
+				fruit_fly_matches.append(ff_region)
+
+		# Identify which sequence is human
+		if 'human' in self.query_obj.description.lower():
+			self.query_matches = human_matches
+			self.ref_matches = fruit_fly_matches
+		else:
+			self.query_matches = fruit_fly_matches
+			self.ref_matches = human_matches
 
 
 	def make_arg_parser(self):
@@ -82,6 +113,8 @@ class Needleman_Wunsch_Executable(object):
 
 
 	def build_grids(self):
+		print('Building score and traceback grids...')
+
 		# Set up score grid with reference on top, query on left
 		score_grid = np.empty((len(self.query)+1, len(self.ref)+1)) # size grid to account for 1 gap at beginning of both sequences
 		score_grid[:] = np.nan 
@@ -148,6 +181,9 @@ class Needleman_Wunsch_Executable(object):
 		Probably could write this section better, with regard to checking arrows.
 		Been getting wrong alignments if I do only one loop over all arrows.
 		'''
+
+		parse('Tracing a new path or a ')
+
 		while a > 0 and b > 0:
 			# Get current arrow(s)
 			arrows = list(self.traceback_grid[a, b])
@@ -213,11 +249,12 @@ class Needleman_Wunsch_Executable(object):
 
 		if self.max_alignments is None or self.max_alignments and len(self.candidates) < self.max_alignments:
 			self.candidates.append(candidate)
-		
+	
+
 	def run(self):
 		# If matches file is not given, 
 		if self.args.matches is not None:
-			print('Matches supplied')
+			self.parse_matches(self.args.matches)
 		else: 
 			self.build_grids()
 			a = len(self.query)
@@ -236,6 +273,8 @@ if __name__ == '__main__':
 	# Can set max_alignments = None, but this will lead to memory blowout w/ larger sequences
 	# Need to fix this if want to return more alignments. 
 	# Plus we are only interested in 1 alignment for now. 
+
+	# Assumes that one of the sequences is human and that the description contains 'human' somewhere.
 
 	# Create and run Needleman Wunsch executable 
 	nw = Needleman_Wunsch_Executable(max_alignments, match_award, gap_penalty, mismatch_penalty)
