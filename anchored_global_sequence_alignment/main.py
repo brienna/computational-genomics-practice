@@ -27,10 +27,10 @@ class Needleman_Wunsch_Executable(object):
 
 	def parse_sequences(self, ref, query):
 		# Parse query and ref data / can assign this as a function later to check for fasta instead of passed through executable init
-		#self.query = list(SeqIO.parse(query, 'fasta'))[0].seq
-		#self.ref = list(SeqIO.parse(ref, 'fasta'))[0].seq
-		self.ref = 'GCATGCUE'
-		self.query = 'GATTACA'
+		self.query = list(SeqIO.parse(query, 'fasta'))[0].seq
+		self.ref = list(SeqIO.parse(ref, 'fasta'))[0].seq
+		#self.ref = 'GCATGCUE'
+		#self.query = 'GATTACA'
 
 
 	def make_arg_parser(self):
@@ -150,34 +150,68 @@ class Needleman_Wunsch_Executable(object):
 		'''
 		while a > 0 and b > 0:
 			# Get current arrow(s)
-			arrows = list(self.traceback_grid[a][b])
-			
-			# If there are additional arrows
-			if len(arrows) > 1:
-				for i, arrow in enumerate(arrows[1:]):
-					# Split path into two 
-					candidate2 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
-					arrow2 = arrows[1]
-					a2 = a
-					b2 = b
-					if arrow == 'D':
-						a2, b2 = self.trace_diagonally(a2, b2, candidate2)
-					elif arrow == 'U':
-						a2 = self.trace_up(a2, candidate2)
-					elif arrow == 'H':
-						b2 = self.trace_horizontally(b2, candidate2)
-					self.traceback(a2, b2, candidate2)
-
-			# Deal with the first arrow 
+			arrows = list(self.traceback_grid[a, b])
+			num_arrows = len(arrows)
+		
+			if num_arrows == 3:
+				# Handle third arrow
+				new_candidate3 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
+				arrow = arrows[2]
+				a3 = a
+				b3 = b
+				if arrow == 'D':
+					a3, b3 = self.trace_diagonally(a3, b3, new_candidate3)
+				elif arrow == 'U':
+					a3 = self.trace_up(a3, new_candidate3)
+				elif arrow == 'H':
+					b3 = self.trace_horizontally(b3, new_candidate3)
+				if len(candidates) < self.max_alignments:
+					self.traceback(a3, b3, new_candidate3)
+				
+				# Handle second arrow
+				new_candidate2 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
+				arrow = arrows[1]
+				a2 = a
+				b2 = b
+				if arrow == 'D':
+					a2, b2 = self.trace_diagonally(a2, b2, new_candidate2)
+				elif arrow == 'U':
+					a2 = self.trace_up(a2, new_candidate2)
+				elif arrow == 'H':
+					b2 = self.trace_horizontally(b2, new_candidate2)
+				if len(self.candidates) < self.max_alignments:
+					self.traceback(a2, b2, new_candidate2)
+				
+			elif num_arrows == 2:
+				# Handle second arrow
+				new_candidate2 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
+				arrow = arrows[1]
+				a2 = a
+				b2 = b
+				if arrow == 'D':
+					a2, b2 = self.trace_diagonally(a2, b2, new_candidate2)
+				elif arrow == 'U':
+					a2 = self.trace_up(a2, new_candidate2)
+				elif arrow == 'H':
+					b2 = self.trace_horizontally(b2, new_candidate2)
+				if len(self.candidates) < self.max_alignments:
+					self.traceback(a2, b2, new_candidate2)
+				
+			# Handle first arrow
 			arrow = arrows[0]
 			if arrow == 'U':
 				a = self.trace_up(a, candidate)
 			elif arrow == 'D':
 				a, b = self.trace_diagonally(a, b, candidate)
 			elif arrow == 'H':
-				b = self.trace_horizontally(b, candidate) 
+				b = self.trace_horizontally(b, candidate)  
+		
+		while a > 0:
+			a = self.trace_up(a, candidate)     
+		while b > 0:
+			b = self.trace_horizontally(b, candidate)
 
-		if max_alignments and len(self.candidates) < self.max_alignments or max_alignments is None:
+		if self.max_alignments is None or self.max_alignments and len(self.candidates) < self.max_alignments:
 			self.candidates.append(candidate)
 		
 	def run(self):
@@ -186,11 +220,9 @@ class Needleman_Wunsch_Executable(object):
 			print('Matches supplied')
 		else: 
 			self.build_grids()
-			b = len(self.ref) 
 			a = len(self.query)
+			b = len(self.ref) 
 			self.traceback(a, b)
-			#max_score = max([candidate['score'] for candidate in self.candidates]) 
-			#self.candidates = [candidate for candidate in self.candidates if candidate['score'] == max_score] # remove any low scorers
 			print('Number of alignments found: ' + str(len(self.candidates)))
 			print(self.candidates)
 
@@ -203,6 +235,7 @@ if __name__ == '__main__':
 
 	# Can set max_alignments = None, but this will lead to memory blowout w/ larger sequences
 	# Need to fix this if want to return more alignments. 
+	# Plus we are only interested in 1 alignment for now. 
 
 	# Create and run Needleman Wunsch executable 
 	nw = Needleman_Wunsch_Executable(max_alignments, match_award, gap_penalty, mismatch_penalty)
