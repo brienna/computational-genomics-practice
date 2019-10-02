@@ -53,25 +53,31 @@ class Needleman_Wunsch_Executable(object):
 
 
 	def trace_diagonally(self, a, b, candidate):
-	    a -= 1
-	    b -= 1
-	    candidate['ref'] = self.ref[b] + candidate['ref']
-	    candidate['query'] = self.query[a] + candidate['query']
-	    return a, b
+		a -= 1
+		b -= 1
+		candidate['ref'] = self.ref[b] + candidate['ref']
+		candidate['query'] = self.query[a] + candidate['query']
+		if self.ref[b] == self.query[a]:
+			candidate['score'] += match_award
+		else:
+			candidate['score'] += mismatch_penalty
+		return a, b
 
 
 	def trace_up(self, a, candidate):
-	    a -= 1
-	    candidate['ref'] = '-' + candidate['ref']
-	    candidate['query'] = self.query[a] + candidate['query']
-	    return a
-	    
+		a -= 1
+		candidate['ref'] = '-' + candidate['ref']
+		candidate['query'] = self.query[a] + candidate['query']
+		candidate['score'] += gap_penalty
+		return a
+		
 
 	def trace_horizontally(self, b, candidate):
-	    b -= 1
-	    candidate['ref'] = self.ref[b] + candidate['ref']
-	    candidate['query'] = '-' + candidate['query']
-	    return b
+		b -= 1
+		candidate['ref'] = self.ref[b] + candidate['ref']
+		candidate['query'] = '-' + candidate['query']
+		candidate['score'] += gap_penalty
+		return b
 
 
 	def build_grids(self):
@@ -136,36 +142,36 @@ class Needleman_Wunsch_Executable(object):
 		self.traceback_grid = traceback_grid
 
 
-	def traceback(self, a, b, candidate):
-	    while a > 0 and b > 0:
-	        # Get current arrow(s)
-	        arrows = list(self.traceback_grid[a][b])
-	        two_choices = len(arrows) > 1 # True if two arrows
-	        
-	        # If there is a second arrow
-	        if two_choices:
-	            # Split path into two 
-	            candidate2 = {'ref': candidate['ref'], 'query': candidate['query']}
-	            arrow2 = arrows[1]
-	            a2 = a
-	            b2 = b
-	            if arrow2 == 'D':
-	                a2, b2 = self.trace_diagonally(a2, b2, candidate2)
-	            elif arrow2 == 'U':
-	                a2 = self.trace_up(a2, candidate2)
-	            elif arrow2 == 'H':
-	                b2 = self.trace_horizontally(b2, candidate2)
-	            self.candidates.append(self.traceback(a2, b2, candidate2))
-	        
-	        # Deal with the first arrow 
-	        arrow = arrows[0]
-	        if arrow == 'U':
-	            a = self.trace_up(a, candidate)
-	        elif arrow == 'D':
-	            a, b = self.trace_diagonally(a, b, candidate)
-	        elif arrow == 'H':
-	            b = self.trace_horizontally(b, candidate) 
-	    return candidate
+	def traceback(self, a, b, candidate={'ref': '', 'query': '', 'score': 0}):
+		while a > 0 and b > 0:
+			# Get current arrow(s)
+			arrows = list(self.traceback_grid[a][b])
+			two_choices = len(arrows) > 1 # True if two arrows
+			
+			# If there is a second arrow
+			if two_choices:
+				# Split path into two 
+				candidate2 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
+				arrow2 = arrows[1]
+				a2 = a
+				b2 = b
+				if arrow2 == 'D':
+					a2, b2 = self.trace_diagonally(a2, b2, candidate2)
+				elif arrow2 == 'U':
+					a2 = self.trace_up(a2, candidate2)
+				elif arrow2 == 'H':
+					b2 = self.trace_horizontally(b2, candidate2)
+				self.traceback(a2, b2, candidate2)
+			
+			# Deal with the first arrow 
+			arrow = arrows[0]
+			if arrow == 'U':
+				a = self.trace_up(a, candidate)
+			elif arrow == 'D':
+				a, b = self.trace_diagonally(a, b, candidate)
+			elif arrow == 'H':
+				b = self.trace_horizontally(b, candidate) 
+		self.candidates.append(candidate)
 
 
 	def run(self):
@@ -176,8 +182,7 @@ class Needleman_Wunsch_Executable(object):
 			self.build_grids()
 			b = len(self.ref) 
 			a = len(self.query)
-			candidate = {'ref': '', 'query': ''}
-			self.candidates.append(self.traceback(a, b, candidate))
+			self.traceback(a, b)
 			print(self.candidates)
 
 
