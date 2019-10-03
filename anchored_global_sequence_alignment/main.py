@@ -121,8 +121,8 @@ class Needleman_Wunsch_Executable(object):
 		# Set up score grid with reference on top, query on left
 		score_grid = np.empty((len(self.query)+1, len(self.ref)+1)) # size grid to account for 1 gap at beginning of both sequences
 		score_grid[:] = np.nan 
-		score_grid[0] = np.arange(0, -len(score_grid[0]), self.gap_penalty) # Populate 1st row based on gap penalty
-		score_grid[:,0] = np.arange(0, -len(score_grid[:,0]), self.gap_penalty) # Populate 1st column based on gap penalty
+		score_grid[0] = np.arange(0, -len(score_grid[0]) * -self.gap_penalty, self.gap_penalty) # Populate 1st row based on gap penalty
+		score_grid[:,0] = np.arange(0, -len(score_grid[:,0]) * -self.gap_penalty, self.gap_penalty) # Populate 1st column based on gap penalty
 
 		# Set up traceback grid with same shape as score grid
 		traceback_grid = np.empty((len(self.query)+1, len(self.ref)+1), dtype=object)
@@ -177,6 +177,7 @@ class Needleman_Wunsch_Executable(object):
 		print(traceback_grid)
 		self.score_grid = score_grid
 		self.traceback_grid = traceback_grid
+		print(score_grid[-1,-1])
 
 	def traceback(self, start_a, a, start_b, b, candidate, trace_id=1):
 		'''
@@ -322,7 +323,6 @@ class Needleman_Wunsch_Executable(object):
 
 		# If matches file is not given, 
 		if self.args.matches is None:
-			self.build_grids()
 			a = len(self.query)
 			b = len(self.ref) 
 			self.traceback(0, a, 0, b, {'ref': '', 'query': '', 'score': 0})
@@ -340,8 +340,8 @@ class Needleman_Wunsch_Executable(object):
 
 if __name__ == '__main__':
 	match_award = 1
-	gap_penalty = -1
-	mismatch_penalty = -1
+	gap_penalty = -2
+	mismatch_penalty = -3
 	max_alignments = 1
 
 	# Can set max_alignments = None, but this will lead to memory blowout w/ larger sequences
