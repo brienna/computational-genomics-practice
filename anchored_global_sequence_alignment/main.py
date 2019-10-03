@@ -47,10 +47,10 @@ class Needleman_Wunsch_Executable(object):
 			for line in infile:
 				positions = re.split('\t|\n', line)
 		
-				h_region = {'start': positions[0],
-							'end': positions[1]}
-				ff_region = {'start': positions[2],
-							'end': positions[3]}
+				h_region = {'start': int(positions[0]),
+							'end': int(positions[1])}
+				ff_region = {'start': int(positions[2]),
+							'end': int(positions[3])}
 		
 				human_matches.append(h_region)
 				fruit_fly_matches.append(ff_region)
@@ -62,6 +62,9 @@ class Needleman_Wunsch_Executable(object):
 		else:
 			self.query_matches = fruit_fly_matches
 			self.ref_matches = human_matches
+
+		print(self.ref_matches)
+		print(self.query_matches)
 
 
 	def make_arg_parser(self):
@@ -156,7 +159,7 @@ class Needleman_Wunsch_Executable(object):
 			arrow = ''
 			if score_d > score_u and score_d > score_h:
 				arrow = 'D'
-			elif score_u > score_d and score_u > score_h: 
+			elif score_u > score_d and score_u > score_h:
 				arrow = 'U'
 			elif score_h > score_d and score_h > score_u:
 				arrow = 'H'
@@ -175,20 +178,25 @@ class Needleman_Wunsch_Executable(object):
 		self.score_grid = score_grid
 		self.traceback_grid = traceback_grid
 
-
-	def traceback(self, a, b, candidate={'ref': '', 'query': '', 'score': 0}):
+	def traceback(self, start_a, a, start_b, b, candidate, trace_id=1):
 		'''
 		Probably could write this section better, with regard to checking arrows.
 		Been getting wrong alignments if I do only one loop over all arrows.
 		'''
 
-		parse('Tracing a new path or a ')
+		print('Tracing...')
 
-		while a > 0 and b > 0:
+		if a == start_a and b == start_b:
+			self.trace_diagonally(a+1, b+1, candidate)
+			return candidate
+		
+		# need a condition if one sequence has only one letter and the other sequence has more than one letter
+		
+		while a > start_a and b > start_b:
 			# Get current arrow(s)
 			arrows = list(self.traceback_grid[a, b])
 			num_arrows = len(arrows)
-		
+			
 			if num_arrows == 3:
 				# Handle third arrow
 				new_candidate3 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
@@ -201,8 +209,9 @@ class Needleman_Wunsch_Executable(object):
 					a3 = self.trace_up(a3, new_candidate3)
 				elif arrow == 'H':
 					b3 = self.trace_horizontally(b3, new_candidate3)
-				if len(candidates) < self.max_alignments:
-					self.traceback(a3, b3, new_candidate3)
+				if trace_id < self.max_alignments:
+					trace_id += 1
+					self.traceback(start_a, a3, start_b, b3, new_candidate3, trace_id)
 				
 				# Handle second arrow
 				new_candidate2 = {'ref': candidate['ref'], 'query': candidate['query'], 'score': candidate['score']}
@@ -215,8 +224,9 @@ class Needleman_Wunsch_Executable(object):
 					a2 = self.trace_up(a2, new_candidate2)
 				elif arrow == 'H':
 					b2 = self.trace_horizontally(b2, new_candidate2)
-				if len(self.candidates) < self.max_alignments:
-					self.traceback(a2, b2, new_candidate2)
+				if trace_id < self.max_alignments:
+					trace_id += 1
+					self.traceback(start_a, a2, start_b, b2, new_candidate2, trace_id)
 				
 			elif num_arrows == 2:
 				# Handle second arrow
@@ -230,8 +240,9 @@ class Needleman_Wunsch_Executable(object):
 					a2 = self.trace_up(a2, new_candidate2)
 				elif arrow == 'H':
 					b2 = self.trace_horizontally(b2, new_candidate2)
-				if len(self.candidates) < self.max_alignments:
-					self.traceback(a2, b2, new_candidate2)
+				if trace_id < self.max_alignments:
+					trace_id += 1
+					self.traceback(start_a, a2, start_b, b2, new_candidate2, trace_id)
 				
 			# Handle first arrow
 			arrow = arrows[0]
@@ -242,27 +253,90 @@ class Needleman_Wunsch_Executable(object):
 			elif arrow == 'H':
 				b = self.trace_horizontally(b, candidate)  
 		
-		while a > 0:
+		while a > start_a:
 			a = self.trace_up(a, candidate)     
-		while b > 0:
+		while b > start_b:
 			b = self.trace_horizontally(b, candidate)
-
-		if self.max_alignments is None or self.max_alignments and len(self.candidates) < self.max_alignments:
-			self.candidates.append(candidate)
+		
+		self.candidates.append(candidate)
+		return candidate # return candidates[0] # return first alignment
 	
 
+	def traceback_with_matches(self):
+		if len(self.query_matches) != len(self.ref_matches):
+			print('Please fix your matches file and rerun.')
+			return
+
+		global_ref = ''
+		global_query = ''
+
+		# Identify non matching region at start, if any
+		if self.ref_matches[0]['start'] != 0:
+			region_end_ref = self.ref_matches[0]['start']
+			print('Aligning 0—' + str(region_end_ref))
+		
+			if self.query_matches[0]['start'] != 0:
+				region_end_query = self.query_matches[0]['start']
+				print('Aligning 0—' + str(region_end_query))
+				# Submit NW request on this segment
+				alignment = self.traceback(0, region_end_query, 0, region_end_ref, {'ref': '', 'query': '', 'score': 0})
+				global_ref += alignment['ref'] 
+				global_query += alignment['query'] 
+				print(alignment)
+		
+		for i, match in enumerate(self.query_matches): # just pick one to start iterating over, since they are shaped the same
+			ref_segment = self.ref[self.ref_matches[i]['start'] : self.ref_matches[i]['end']]
+			query_segment = self.query[match['start'] : match['end']]
+			global_ref += ref_segment 
+			global_query += query_segment 
+			print('Adding ' + str(self.ref_matches[i]['start']) + '—' + str(self.ref_matches[i]['end']))
+			print('Adding ' + str(self.query_matches[i]['start']) + '—' + str(self.query_matches[i]['end']))
+			print(ref_segment)
+			print(query_segment)
+			
+			# Identify region between current match and next match or sequence end
+			region_start_ref = self.ref_matches[i]['end']
+			if i+1 < len(self.ref_matches): # If we have a next match 
+				region_end_ref = self.ref_matches[i+1]['start']
+			else:
+				region_end_ref = len(self.ref) 
+			region_start_query = match['end']
+			if i+1 < len(self.query_matches):
+				region_end_query = self.query_matches[i + 1]['start']
+			else:
+				region_end_query = len(self.query) 
+				
+			# Submit NW requests on these segments
+			print('Aligning ' + str(region_start_ref) + '—' + str(region_end_ref))
+			print('Aligning ' + str(region_start_query) + '—' + str(region_end_query))
+			alignment2 = self.traceback(region_start_query, region_end_query, region_start_ref, region_end_ref, {'ref': '', 'query': '', 'score': 0})
+			global_ref += alignment2['ref'] 
+			global_query += alignment2['query'] 
+
+		return {'ref': global_ref, 'query': global_query}
+		
+
 	def run(self):
+		# Build score and traceback grids. (Don't know if it is faster to build a complete grid if there are matches or to build multiple smaller grids.)
+		self.build_grids()
+
 		# If matches file is not given, 
-		if self.args.matches is not None:
-			self.parse_matches(self.args.matches)
-		else: 
+		if self.args.matches is None:
 			self.build_grids()
 			a = len(self.query)
 			b = len(self.ref) 
-			self.traceback(a, b)
+			self.traceback(0, a, 0, b, {'ref': '', 'query': '', 'score': 0})
 			print('Number of alignments found: ' + str(len(self.candidates)))
 			print(self.candidates)
-
+		else: 
+			self.parse_matches(self.args.matches)
+			alignment = self.traceback_with_matches()
+			print(alignment['ref'])
+			print(alignment['query'])
+			# Ensure all letters have been captured
+			print(str(alignment['ref']).replace('-', '') == self.ref)
+			print(str(alignment['query']).replace('-', '') == self.query)
+			print(len(str(alignment['ref']).replace('-','')))
 
 if __name__ == '__main__':
 	match_award = 1
